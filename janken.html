@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="桜滴おはなとじゃんけんで遊べるミニゲームページです。">
+  <title>じゃんけんミニゲーム - 桜滴おはな Official</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@300;400;500&family=Noto+Sans+JP:wght@300;400;500;700&display=swap"
+    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/kyotu.css">
+  <link rel="stylesheet" href="css/janken.css">
+  <link rel="icon" href="img/mini_char1.png">
+</head>
+
+<body>
+  <header id="header">
+    <div class="header-content">
+      <a href="index.html">
+        <img src="img/logo.png" height="70" alt="桜滴おはな Official">
+      </a>
+      <nav>
+        <ul>
+          <li><a href="index.html" class="back-link">トップページに戻る</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section id="janken-section" class="fade-in">
+      <h2>おはなとじゃんけん</h2>
+      <div class="janken-card">
+        <p class="janken-description">おはなちゃんとじゃんけんで遊びましょう！</p>
+
+        <!-- メイン画像表示エリア -->
+        <!-- 必要に応じて .png 以外の拡張子に変更してください -->
+        <div class="janken-image-container">
+          <img id="janken-main-image" src="img/jstart.png" alt="じゃんけんスタート" class="janken-main-image">
+        </div>
+
+        <!-- ステータステキスト（初期状態のメッセージ） -->
+        <div class="janken-result-area">
+          <p id="janken-status-text" class="janken-status-text">最初はグー！</p>
+          <p id="janken-detail-text" class="janken-cpu-hand-text"></p>
+          <p id="janken-result-text" class="janken-result-text"></p>
+        </div>
+
+        <!-- 手の選択ボタン -->
+        <div class="janken-buttons">
+          <button class="hand-button" data-hand="gu">グー</button>
+          <button class="hand-button" data-hand="choki">チョキ</button>
+          <button class="hand-button" data-hand="pa">パー</button>
+        </div>
+
+        <!-- もう一回ボタン -->
+        <div class="janken-reset-area">
+          <button id="janken-reset" class="janken-reset-button">もう一回</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2025 桜滴おはな All rights reserved.</p>
+    <p><a href="term.html" class="footer-link">利用規約</a></p>
+  </footer>
+
+  <!-- 音声ファイル -->
+  <!-- 掛け声（グーチョキパーを出したとき） -->
+  <audio id="se-hand" src="mp3/じゃんけんぽん掛け声ohana.mp3" preload="auto"></audio>
+  <!-- 勝ちボイス（ランダムでどちらかが再生される） -->
+  <audio id="se-win-1" src="mp3/じゃんけん勝ちボイス①ohana.mp3" preload="auto"></audio>
+  <audio id="se-win-2" src="mp3/じゃんけん勝ちボイス②ohana.mp3" preload="auto"></audio>
+  <!-- 負けボイス（ランダムでどちらかが再生される） -->
+  <audio id="se-lose-1" src="mp3/じゃんけん負けボイス①ohana.mp3" preload="auto"></audio>
+  <audio id="se-lose-2" src="mp3/じゃんけん負けボイス②ohana.mp3" preload="auto"></audio>
+  <!-- あいこボイス（ランダムでどちらかが再生される） -->
+  <audio id="se-draw-1" src="mp3/じゃんけんあいこボイス①ohana.mp3" preload="auto"></audio>
+  <audio id="se-draw-2" src="mp3/じゃんけんあいこボイス②ohana.mp3" preload="auto"></audio>
+
+  <script>
+    // 画像マップ（必要に応じて拡張子を変更してください）
+    const imageMap = {
+      ready: "img/jstart.png", // 初期画像
+      end: "img/jend.png",     // 結果画像（勝ち・あいこ時）
+      lose1: "img/jlose1.png", // 負け画像1
+      lose2: "img/jlose2.png", // 負け画像2
+      gu: "img/gu-.png",
+      choki: "img/choki.png",
+      pa: "img/pa-.png",
+    };
+
+    // 要素参照
+    const mainImage = document.getElementById("janken-main-image");
+    const resultText = document.getElementById("janken-result-text");
+    const detailText = document.getElementById("janken-detail-text");
+    const statusText = document.getElementById("janken-status-text");
+    const resetButton = document.getElementById("janken-reset");
+    const handButtons = document.querySelectorAll(".hand-button");
+
+    // 手の配列
+    const hands = ["gu", "choki", "pa"];
+    const handNames = {
+      gu: "グー",
+      choki: "チョキ",
+      pa: "パー"
+    };
+
+    // 音声再生ヘルパー関数（Promiseを返す）
+    function playSound(id) {
+      return new Promise((resolve) => {
+        const audio = document.getElementById(id);
+        if (audio && audio.src) {
+          audio.currentTime = 0;
+          const playPromise = audio.play();
+          
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                // 再生が完了したらresolve
+                audio.onended = () => {
+                  resolve();
+                };
+              })
+              .catch(() => {
+                // 自動再生制限等で失敗した場合は即座にresolve
+                resolve();
+              });
+          } else {
+            // 再生できない場合は即座にresolve
+            resolve();
+          }
+        } else {
+          // 音源がない場合は即座にresolve
+          resolve();
+        }
+      });
+    }
+
+    // 音源の長さを取得する関数（ミリ秒単位）
+    function getAudioDuration(id) {
+      const audio = document.getElementById(id);
+      if (audio && audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+        return audio.duration * 1000; // ミリ秒に変換
+      }
+      return 0;
+    }
+
+    // あいこの場合の待機時間を計算する関数
+    function getAverageVoiceDuration() {
+      const durations = [
+        getAudioDuration("se-win-1"),
+        getAudioDuration("se-win-2"),
+        getAudioDuration("se-lose-1"),
+        getAudioDuration("se-lose-2")
+      ].filter(d => d > 0); // 有効な長さのみをフィルタ
+
+      if (durations.length > 0) {
+        const sum = durations.reduce((a, b) => a + b, 0);
+        return sum / durations.length;
+      }
+      // 音源の長さが取得できない場合はデフォルトで1.5秒待機
+      return 1500;
+    }
+
+    // じゃんけん判定関数
+    function judge(player, cpu) {
+      if (player === cpu) return "draw";
+      if (
+        (player === "gu" && cpu === "choki") ||
+        (player === "choki" && cpu === "pa") ||
+        (player === "pa" && cpu === "gu")
+      ) {
+        return "win";
+      }
+      return "lose";
+    }
+
+    // じゃんけん実行関数
+    async function playJanken(playerHand) {
+      // CPUの手をランダム決定
+      const cpuHand = hands[Math.floor(Math.random() * hands.length)];
+
+      // 手の選択ボタンを無効化
+      handButtons.forEach(button => {
+        button.disabled = true;
+      });
+
+      // 「もう一回」ボタンを無効化
+      resetButton.disabled = true;
+
+      // 判定
+      const result = judge(playerHand, cpuHand);
+      let resultMessage = "";
+      let resultAudioId = "";
+
+      // 掛け声の長さを取得
+      const handAudioDuration = getAudioDuration("se-hand");
+      
+      // 掛け声を再生（グーチョキパーを出したとき）
+      const handAudioPromise = playSound("se-hand");
+      
+      // 掛け声が終わる1秒前に画像を変更
+      if (handAudioDuration > 1000) {
+        // 掛け声の長さ - 1秒のタイミングで画像を変更
+        setTimeout(() => {
+          mainImage.src = imageMap[cpuHand];
+          // 詳細テキストを更新
+          detailText.textContent = `あなた: ${handNames[playerHand]} / おはな: ${handNames[cpuHand]}`;
+        }, handAudioDuration - 1000);
+        // 掛け声が完全に終わるまで待機
+        await handAudioPromise;
+      } else {
+        // 掛け声が1秒未満、または音源の長さが取得できない場合は、掛け声が終わった後に画像を変更
+        await handAudioPromise;
+        mainImage.src = imageMap[cpuHand];
+        detailText.textContent = `あなた: ${handNames[playerHand]} / おはな: ${handNames[cpuHand]}`;
+      }
+
+      // 判定結果に応じて音源と画像を選択
+      let resultImage = "";
+      if (result === "win") {
+        resultMessage = "あなたの勝ち！";
+        resultText.style.color = "#4299e1";
+        // 負けボイスをランダムで選択
+        const loseIndex = Math.floor(Math.random() * 2) + 1;
+        resultAudioId = `se-lose-${loseIndex}`;
+        // おはなが負けた時の画像をランダムで選択
+        const loseImageIndex = Math.floor(Math.random() * 2) + 1;
+        resultImage = `lose${loseImageIndex}`;
+      } else if (result === "lose") {
+        resultMessage = "おはなの勝ち！";
+        resultText.style.color = "#ff8aa0";
+        // 勝ちボイスをランダムで選択
+        const winIndex = Math.floor(Math.random() * 2) + 1;
+        resultAudioId = `se-win-${winIndex}`;
+        // おはなが勝った時はjendを表示
+        resultImage = "end";
+      } else {
+        resultMessage = "あいこ！";
+        resultText.style.color = "#718096";
+        // あいこボイスをランダムで選択
+        const drawIndex = Math.floor(Math.random() * 2) + 1;
+        resultAudioId = `se-draw-${drawIndex}`;
+        // あいこ時はjendを表示
+        resultImage = "end";
+      }
+
+      resultText.textContent = resultMessage;
+      statusText.textContent = "\u00A0"; // 非表示文字でスペースを確保
+
+      // 2秒待機
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 結果画像に変更
+      mainImage.src = imageMap[resultImage];
+
+      // 結果音を再生
+      if (resultAudioId) {
+        await playSound(resultAudioId);
+      }
+
+      // 結果発表が終わったので「もう一回」ボタンを有効化
+      resetButton.disabled = false;
+    }
+
+    // じゃんけんリセット関数
+    function resetJanken() {
+      // メイン画像を初期状態に戻す
+      mainImage.src = imageMap.ready;
+
+      // テキストを初期状態にクリア
+      statusText.textContent = "最初はグー！";
+      detailText.textContent = "\u00A0"; // 非表示文字でスペースを確保
+      resultText.textContent = "\u00A0"; // 非表示文字でスペースを確保
+
+      // 手の選択ボタンを有効化
+      handButtons.forEach(button => {
+        button.disabled = false;
+      });
+
+      // 開始音を再生
+      playSound("se-start");
+    }
+
+    // イベントリスナー設定
+    handButtons.forEach(button => {
+      button.addEventListener("click", () => {
+        const playerHand = button.getAttribute("data-hand");
+        playJanken(playerHand);
+      });
+    });
+
+    resetButton.addEventListener("click", resetJanken);
+
+    // 初期状態で「もう一回」ボタンを無効化
+    resetButton.disabled = true;
+
+    // ページ読み込み時に音源のメタデータをロード
+    window.addEventListener("load", () => {
+      const audioIds = ["se-hand", "se-win-1", "se-win-2", "se-lose-1", "se-lose-2", "se-draw-1", "se-draw-2"];
+      audioIds.forEach(id => {
+        const audio = document.getElementById(id);
+        if (audio) {
+          audio.load();
+        }
+      });
+    });
+
+    // ヘッダースクロール効果
+    window.addEventListener("scroll", () => {
+      const header = document.getElementById("header");
+      if (window.scrollY > 50) {
+        header.classList.add("scrolled");
+      } else {
+        header.classList.remove("scrolled");
+      }
+    });
+
+    // Intersection Observer for fade-in animations
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: "0px 0px -50px 0px"
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("visible");
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll(".fade-in").forEach(el => {
+      observer.observe(el);
+    });
+  </script>
+</body>
+
+</html>
+

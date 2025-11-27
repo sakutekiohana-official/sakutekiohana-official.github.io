@@ -1,0 +1,48 @@
+/* 共通リセットCSS */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* CSS変数定義 */
+:root {
+  --primary-pink: #ff8aa0;
+  --secondary-pink: #fcdde8;
+  --light-blue: #d3ecf9;
+  --accent-purple: #b794f6;
+  --text-dark: #2d3748;
+  --text-light: #718096;
+  --white: #ffffff;
+  --gradient-bg: linear-gradient(135deg, #fcdde8 0%, #d3ecf9 50%, #e6fffa 100%);
+  --card-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  --hover-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+}
+
+/* 共通bodyスタイル */
+body {
+  font-family: 'Kiwi Maru', serif;
+  background: var(--gradient-bg);
+  background-attachment: fixed;
+  color: var(--text-dark);
+  margin: 0;
+  padding: 0;
+  line-height: 1.8;
+}
+
+/* 共通footerスタイル */
+footer {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-light);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* 共通リンクスタイル */
+a {
+  color: var(--primary-pink);
+  text-decoration: underline;
+}
+
