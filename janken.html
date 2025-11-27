@@ -109,32 +109,126 @@
       pa: "パー"
     };
 
+    // 音声要素の初期化フラグ
+    let audioInitialized = false;
+
+    // 音声要素を初期化する関数（ユーザーインタラクション時に呼び出す）
+    function initializeAudio() {
+      if (audioInitialized) return;
+      
+      const audioIds = ["se-hand", "se-win-1", "se-win-2", "se-lose-1", "se-lose-2", "se-draw-1", "se-draw-2"];
+      audioIds.forEach(id => {
+        const audio = document.getElementById(id);
+        if (audio) {
+          // 音声を読み込む
+          audio.load();
+          // スマホでの再生を確実にするため、音量を設定
+          audio.volume = 1.0;
+        }
+      });
+      audioInitialized = true;
+    }
+
+    // 画像の読み込みを待つ関数
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        // 絶対パスに変換して比較
+        const currentSrc = new URL(mainImage.src, window.location.href).href;
+        const newSrc = new URL(src, window.location.href).href;
+        
+        // 既に同じ画像が読み込まれている場合は即座に解決
+        if (currentSrc === newSrc && mainImage.complete && mainImage.naturalWidth > 0) {
+          resolve();
+          return;
+        }
+
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => {
+          // エラーでもタイムアウトで解決（フォールバック）
+          setTimeout(() => resolve(), 100);
+        };
+        img.src = src;
+        
+        // タイムアウト設定（5秒）
+        setTimeout(() => {
+          if (!img.complete) {
+            resolve(); // タイムアウトでも解決（フォールバック）
+          }
+        }, 5000);
+      });
+    }
+
+    // 画像を変更する関数（読み込みを待つ）
+    async function changeImage(src) {
+      try {
+        // 画像の読み込みを待つ
+        await loadImage(src);
+        // 画像を変更
+        mainImage.src = src;
+        // 画像が確実に表示されるまで少し待機
+        await new Promise(resolve => {
+          if (mainImage.complete && mainImage.naturalWidth > 0) {
+            resolve();
+          } else {
+            mainImage.onload = () => resolve();
+            mainImage.onerror = () => resolve(); // エラーでも続行
+            // タイムアウト
+            setTimeout(() => resolve(), 500);
+          }
+        });
+      } catch (error) {
+        console.warn(error);
+        // エラーが発生しても画像を変更（フォールバック）
+        mainImage.src = src;
+      }
+    }
+
     // 音声再生ヘルパー関数（Promiseを返す）
     function playSound(id) {
       return new Promise((resolve) => {
         const audio = document.getElementById(id);
-        if (audio && audio.src) {
-          audio.currentTime = 0;
-          const playPromise = audio.play();
-          
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => {
-                // 再生が完了したらresolve
-                audio.onended = () => {
-                  resolve();
-                };
-              })
-              .catch(() => {
-                // 自動再生制限等で失敗した場合は即座にresolve
+        if (!audio || !audio.src) {
+          resolve();
+          return;
+        }
+
+        // 音声が読み込まれていない場合は読み込む
+        if (audio.readyState < 2) {
+          audio.load();
+        }
+
+        // 再生前にcurrentTimeをリセット
+        audio.currentTime = 0;
+        
+        // 再生を試みる
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              // 再生が開始されたら、終了を待つ
+              const onEnded = () => {
+                audio.removeEventListener('ended', onEnded);
                 resolve();
-              });
-          } else {
-            // 再生できない場合は即座にresolve
-            resolve();
-          }
+              };
+              audio.addEventListener('ended', onEnded);
+              
+              // エラーが発生した場合の処理
+              const onError = () => {
+                audio.removeEventListener('error', onError);
+                audio.removeEventListener('ended', onEnded);
+                resolve();
+              };
+              audio.addEventListener('error', onError);
+            })
+            .catch((error) => {
+              // 自動再生制限等で失敗した場合
+              console.warn(`音声再生に失敗しました: ${id}`, error);
+              resolve();
+            });
         } else {
-          // 音源がない場合は即座にresolve
+          // 再生できない場合は即座にresolve
           resolve();
         }
       });
@@ -206,17 +300,18 @@
       // 掛け声が終わる1秒前に画像を変更
       if (handAudioDuration > 1000) {
         // 掛け声の長さ - 1秒のタイミングで画像を変更
-        setTimeout(() => {
-          mainImage.src = imageMap[cpuHand];
+        const imageChangeTimeout = handAudioDuration - 1000;
+        setTimeout(async () => {
+          await changeImage(imageMap[cpuHand]);
           // 詳細テキストを更新
           detailText.textContent = `あなた: ${handNames[playerHand]} / おはな: ${handNames[cpuHand]}`;
-        }, handAudioDuration - 1000);
+        }, imageChangeTimeout);
         // 掛け声が完全に終わるまで待機
         await handAudioPromise;
       } else {
         // 掛け声が1秒未満、または音源の長さが取得できない場合は、掛け声が終わった後に画像を変更
         await handAudioPromise;
-        mainImage.src = imageMap[cpuHand];
+        await changeImage(imageMap[cpuHand]);
         detailText.textContent = `あなた: ${handNames[playerHand]} / おはな: ${handNames[cpuHand]}`;
       }
 
@@ -255,11 +350,27 @@
       // 2秒待機
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // 結果画像に変更
-      mainImage.src = imageMap[resultImage];
+      // 結果画像に変更（読み込みを待つ）
+      await changeImage(imageMap[resultImage]);
 
-      // 結果音を再生
+      // 結果音を再生（スマホでの再生を確実にするため、少し待機してから再生）
       if (resultAudioId) {
+        // 音声要素を確認して、必要に応じて読み込む
+        const resultAudio = document.getElementById(resultAudioId);
+        if (resultAudio) {
+          // 音声が読み込まれていない場合は読み込む
+          if (resultAudio.readyState < 2) {
+            resultAudio.load();
+            // 読み込みを待つ（最大500ms）
+            let waitCount = 0;
+            while (resultAudio.readyState < 2 && waitCount < 5) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              waitCount++;
+            }
+          }
+        }
+        // 少し待機してから再生（スマホでの再生を確実にする）
+        await new Promise(resolve => setTimeout(resolve, 100));
         await playSound(resultAudioId);
       }
 
@@ -268,9 +379,9 @@
     }
 
     // じゃんけんリセット関数
-    function resetJanken() {
-      // メイン画像を初期状態に戻す
-      mainImage.src = imageMap.ready;
+    async function resetJanken() {
+      // メイン画像を初期状態に戻す（読み込みを待つ）
+      await changeImage(imageMap.ready);
 
       // テキストを初期状態にクリア
       statusText.textContent = "最初はグー！";
@@ -282,13 +393,15 @@
         button.disabled = false;
       });
 
-      // 開始音を再生
-      playSound("se-start");
+      // 開始音を再生（存在する場合）
+      // playSound("se-start");
     }
 
     // イベントリスナー設定
     handButtons.forEach(button => {
       button.addEventListener("click", () => {
+        // 最初のクリック時に音声を初期化
+        initializeAudio();
         const playerHand = button.getAttribute("data-hand");
         playJanken(playerHand);
       });
@@ -299,13 +412,16 @@
     // 初期状態で「もう一回」ボタンを無効化
     resetButton.disabled = true;
 
-    // ページ読み込み時に音源のメタデータをロード
+    // ページ読み込み時に音源のメタデータをロード（スマホでは制限があるため、ユーザーインタラクション時に初期化）
     window.addEventListener("load", () => {
+      // 音声要素の参照を取得して、基本的な設定を行う
       const audioIds = ["se-hand", "se-win-1", "se-win-2", "se-lose-1", "se-lose-2", "se-draw-1", "se-draw-2"];
       audioIds.forEach(id => {
         const audio = document.getElementById(id);
         if (audio) {
-          audio.load();
+          // スマホでの再生を確実にするため、音量を設定
+          audio.volume = 1.0;
+          // preload属性が設定されているので、メタデータの読み込みは自動で行われる
         }
       });
     });
