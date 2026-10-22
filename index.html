@@ -41,7 +41,7 @@
       </button>
       <nav id="nav-menu">
         <ul>
-          <li><a href="#ionfmaition">INFORMATION</a></li>
+          <li><a href="#ionfmaition">INFOMATION</a></li>
           <li><a href="#profile">PROFILE</a></li>
           <li><a href="#content">CONTENT</a></li>
           <li><a href="#goods">GOODS</a></li>
@@ -100,7 +100,7 @@
               </tr>
               <tr>
                 <td>年齢</td>
-                <td id="age">計算中...</td>
+                <td id="age">3939歳</td>
               </tr>
               <tr>
                 <td>誕生日</td>
@@ -253,33 +253,6 @@
   <script
   src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
   <script>
-    function calculateAge() {
-      const currentDate = new Date();
-      const currentYear = currentDate.getFullYear();
-      const currentMonth = currentDate.getMonth() + 1;
-      const currentDay = currentDate.getDate();
-
-      const birthMonth = 4;
-      const birthDay = 22;
-
-      const baseAge = 102;
-      const baseYear = 2025;
-
-      let yearsSinceBase = currentYear - baseYear;
-
-      if (currentMonth < birthMonth || (currentMonth === birthMonth && currentDay < birthDay)) {
-        yearsSinceBase--;
-      }
-
-      return baseAge + yearsSinceBase;
-    }
-
-    function updateAge() {
-      const age = calculateAge();
-      document.getElementById('age').textContent = `${age}歳`;
-    }
-
-    updateAge();
 
     const swiper = new Swiper('.gallery-container .swiper', {
       loop: true,
@@ -324,6 +297,8 @@
 
     // お知らせカレンダー（JSONで管理・お知らせがある日付のみクリック→ポップアップ表示）
     let announcementsByDate = {};
+    // 毎年繰り返すお知らせ（キーは "MM-DD"）
+    let yearlyAnnouncements = {};
     const today = new Date();
     let calendarYear = today.getFullYear();
     let calendarMonth = today.getMonth() + 1;
@@ -350,31 +325,50 @@
           content: 'サブスクライバー様限定でマウスカーソルプレゼント中！',
           links: [],
           media: []
+        },
+        {
+          date: '10-28',
+          yearly: true,
+          title: '活動記念日！',
+          content: ['今日は桜滴おはなの活動記念日です！', 'いつも応援ありがとう！これからもよろしくね！'],
+          links: [],
+          media: []
         }
       ]
     };
 
+    // お知らせ一覧を日付別に登録（yearly: true は "MM-DD" で毎年表示）
+    function registerAnnouncements(list) {
+      announcementsByDate = {};
+      yearlyAnnouncements = {};
+      (list || []).forEach(a => {
+        if (!a || !a.date) return;
+        if (a.yearly) {
+          yearlyAnnouncements[a.date] = a;
+        } else {
+          announcementsByDate[a.date] = a;
+        }
+      });
+    }
+
+    // 指定日（"YYYY-MM-DD"）のお知らせを取得（年付きのお知らせを優先）
+    function getAnnouncement(dateKey) {
+      if (!dateKey) return null;
+      return announcementsByDate[dateKey] || yearlyAnnouncements[dateKey.slice(5)] || null;
+    }
+
     function loadAnnouncements() {
       if (window.location.protocol === 'file:') {
-        announcementsByDate = {};
-        defaultAnnouncements.announcements.forEach(a => {
-          announcementsByDate[a.date] = a;
-        });
+        registerAnnouncements(defaultAnnouncements.announcements);
         return Promise.resolve();
       }
       return fetch('data/announcements.json')
         .then(res => res.ok ? res.json() : Promise.reject())
         .then(data => {
-          announcementsByDate = {};
-          (data.announcements || []).forEach(a => {
-            announcementsByDate[a.date] = a;
-          });
+          registerAnnouncements(data.announcements);
         })
         .catch(() => {
-          announcementsByDate = {};
-          defaultAnnouncements.announcements.forEach(a => {
-            announcementsByDate[a.date] = a;
-          });
+          registerAnnouncements(defaultAnnouncements.announcements);
         });
     }
 
@@ -397,7 +391,7 @@
         const dateKey = dayNum >= 1 && dayNum <= daysInMonth
           ? calendarYear + '-' + String(calendarMonth).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0')
           : '';
-        const hasNews = dateKey && announcementsByDate[dateKey];
+        const hasNews = getAnnouncement(dateKey);
         const content = isOtherMonth ? '' : dayNum;
         const classes = ['calendar-day'];
         if (isOtherMonth) classes.push('calendar-day-other');
@@ -421,7 +415,7 @@
       const body = document.getElementById('news-popup-body');
       if (!overlay || !body) return;
 
-      const ann = announcementsByDate[dateKey];
+      const ann = getAnnouncement(dateKey);
       if (!ann) {
         closeNewsPopup();
         return;
@@ -587,6 +581,5 @@
     });
   </script>
 </body>
-
 
 </html>
